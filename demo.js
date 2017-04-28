@@ -13,7 +13,11 @@ let listParams = options.listParams;
 let useTimeFilter = options.useTimeFilter;
 let startTime = options.startTime;
 let endTime = options.endTime;
+let delay = options.delay;
 
+
+let timer = null;
+let parallel = 0;
 let urlArr = new Array();         // 保存所有游记的相对url
 let authorCom = false;            // 作者信息是否全部请求完成
 let pageCom = false;              // 游记内容是否全部请求完成
@@ -34,13 +38,13 @@ function getNewPageUrl(index) {
         console.log(err);
       }
 
+
       let $ = cheerio.load(res.body.list);
       $('.tn-list .tn-item').each(function(index, ele) {
         let $ele = $(ele);
         //  排除攻略内容
         if(!$ele.hasClass('tn-item-sales')) {
           urlArr.push($ele.find('.tn-image a').attr('href'));
-
         }
       });
 
@@ -64,20 +68,40 @@ function getPageCon(index) {
   let contentArr = [];
   let iid = urlArr[index].substring(3,10);
 
-  setTimeout(getInfo, 500 * index, iid, url, contentArr, index);
+
+  getInfo(iid, url, contentArr, index);
 
   contentArray.push(contentArr);
   index++;
   if(index == recordLen) {
     return ;
   }
-  getPageCon(index);
+
+  if(parallel >= 4) {
+    timer = setInterval(checkPara, delay, index);
+  } else {
+    getPageCon(index);
+  }
+}
+
+function checkPara(index) {
+  if(parallel == 0) {
+    clearInterval(timer);
+    getPageCon(index);
+  }
+}
+
+function getInfo(iid, url, arr, index) {
+  parallel += 2;
+  getPageInfo(url, arr, index);
+  getAuthorInfo(iid, arr, index);
 }
 
 
 // 获取作者信息和时间
 function getAuthorInfo(id, arr, index) {
   agent.get('http://www.mafengwo.cn/note/__pagelet__/pagelet/headOperateApi')
+      .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36')
       .query({params: `{"iid":${id}}`})
   .end(function(err, res) {
     if(err) {
@@ -91,6 +115,10 @@ function getAuthorInfo(id, arr, index) {
     arr[2] = $('.per_name').text();
     arr[3] = $('.vc_time .time').text().trim();
 
+    // 完成请求并行数减一
+    parallel--;
+
+    // 最后的请求标志置位
     if(index == recordLen - 1) {
       authorCom = true;
     }
@@ -105,6 +133,7 @@ function getAuthorInfo(id, arr, index) {
 // 获取游记内容
 function getPageInfo(url, arr, index) {
   agent.get(url)
+  .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36')
   .end(function(err, res) {
     if(err) {
       console.log(err);
@@ -120,20 +149,25 @@ function getPageInfo(url, arr, index) {
     if($('.va_con').length ==0 && $('.post_wrap').length > 0) {
       arr[0] = $('.post_title').text().trim();
       arr[4] = $('.travel_directory .time').text().slice(-10);
-      arr[5] = $('.travel_directory .day').text();
-      arr[6] = $('.travel_directory .people').text();
-      arr[7] = $('.travel_directory .cost').text();
+      arr[5] = $('.travel_directory .day').text().trim().slice(5);
+      arr[6] = $('.travel_directory .people').text().trim().slice(3);
+      arr[7] = $('.travel_directory .cost').text().trim().slice(5, -3);
       arr[8] = $('.summary').nextAll().text().replace(/\s+/g, ' ');
     } else {
       arr[0] = $('.headtext').text().trim();
       arr[4] = $('.tarvel_dir_list .time').text().slice(-10);
-      arr[5] = $('.tarvel_dir_list .day').text();
-      arr[6] = $('.tarvel_dir_list .people').text();
-      arr[7] = $('.tarvel_dir_list .cost').text();
+      arr[5] = $('.tarvel_dir_list .day').text().trim().slice(5);
+      arr[6] = $('.tarvel_dir_list .people').text().trim().slice(3);
+      arr[7] = $('.tarvel_dir_list .cost').text().trim().slice(5, -3);
       arr[8] = $('.va_con').text().replace(/\s+/g, ' ');
     }
 
-    console.log('第' + (index + 1) + '篇完成')
+    // 完成请求并行数减一
+    parallel--;
+
+    console.log('第' + (index + 1) + '篇完成');
+
+    // 最后的请求标志置位
     if(index == recordLen - 1) {
       pageCom = true;
     }
@@ -144,10 +178,7 @@ function getPageInfo(url, arr, index) {
   });
 }
 
-function getInfo(iid, url, arr, index) {
-  getPageInfo(url, arr, index);
-  getAuthorInfo(iid, arr, index);
-}
+
 
 
 function write() {
@@ -173,11 +204,11 @@ function write() {
 }
 
 function timeFilter() {
-  let startTime = startTime;
-  let endTime = endTime;
+  let start = startTime;
+  let end = endTime;
   contentArray = contentArray.filter(function(value, index) {
     let date = new Date(value[3]);
-    if(date > startTime && date < endTime || index == 0) {
+    if(date > start && date < end || index == 0) {
       return true;
     }
   });
