@@ -28,7 +28,7 @@ let recordLen = 0;
 // 获取所有游记的 url 地址，并在获取完后调用 getPageCon 获取游记内容 tn-item-sales
 function getNewPageUrl(index) {
   agent.post('http://www.mafengwo.cn/gonglve/ajax.php?act=get_travellist')
-    .set('X-Requested-With', 'XMLHttpRequest')
+    // .set('X-Requested-With', 'XMLHttpRequest')
     .type('form')
     // .send('mddid=10300&pageid=mdd_index&sort=1&cost=0&days=0&month=0&tagid=0&page=2')
     .send(listParams)
@@ -37,8 +37,6 @@ function getNewPageUrl(index) {
       if(err) {
         console.log(err);
       }
-
-
       let $ = cheerio.load(res.body.list);
       $('.tn-list .tn-item').each(function(index, ele) {
         let $ele = $(ele);
@@ -62,6 +60,7 @@ function getNewPageUrl(index) {
 
 getNewPageUrl(pageStart);
 
+
 // 获取游记内容并写入文件
 function getPageCon(index) {
   var url = urlBase + urlArr[index];
@@ -77,7 +76,7 @@ function getPageCon(index) {
     return ;
   }
 
-  if(parallel >= 4) {
+  if(parallel > 4) {
     timer = setInterval(checkPara, delay, index);
   } else {
     getPageCon(index);
@@ -85,7 +84,7 @@ function getPageCon(index) {
 }
 
 function checkPara(index) {
-  if(parallel == 0) {
+  if(parallel === 0) {
     clearInterval(timer);
     getPageCon(index);
   }
@@ -100,7 +99,7 @@ function getInfo(iid, url, arr, index) {
 
 // 获取作者信息和时间
 function getAuthorInfo(id, arr, index) {
-  agent.get('http://www.mafengwo.cn/note/__pagelet__/pagelet/headOperateApi')
+  agent.get('http://pagelet.mafengwo.cn/note/pagelet/headOperateApi')
       .set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36')
       .query({params: `{"iid":${id}}`})
   .end(function(err, res) {
@@ -112,7 +111,7 @@ function getAuthorInfo(id, arr, index) {
     // http://www.mafengwo.cn/note/__pagelet__/pagelet/headOperateApi?
 
     let $ = cheerio.load(res.body.data.html);
-    arr[2] = $('.per_name').text();
+    arr[2] = $('.per_name').text().replace(/\s/, ' ');
     arr[3] = $('.vc_time .time').text().trim();
 
     // 完成请求并行数减一
@@ -124,7 +123,7 @@ function getAuthorInfo(id, arr, index) {
     }
 
     if(authorCom && pageCom) {
-      write();
+      setTimeout(write, 5000);
     }
   });
 }
@@ -139,27 +138,32 @@ function getPageInfo(url, arr, index) {
       console.log(err);
     }
     let $ = cheerio.load(res.text);
+    
 
     // 标题，url,作者，时间，出发时间，出行天数，人物，人均费用，正文，
 
-    if(contentArray[0].length == 9) {
-      arr[1] = url;
-    }
-
-    if($('.va_con').length ==0 && $('.post_wrap').length > 0) {
-      arr[0] = $('.post_title').text().trim();
-      arr[4] = $('.travel_directory .time').text().slice(-10);
-      arr[5] = $('.travel_directory .day').text().trim().slice(5);
-      arr[6] = $('.travel_directory .people').text().trim().slice(3);
-      arr[7] = $('.travel_directory .cost').text().trim().slice(5, -3);
-      arr[8] = $('.summary').nextAll().text().replace(/\s+/g, ' ');
-    } else {
-      arr[0] = $('.headtext').text().trim();
-      arr[4] = $('.tarvel_dir_list .time').text().slice(-10);
-      arr[5] = $('.tarvel_dir_list .day').text().trim().slice(5);
-      arr[6] = $('.tarvel_dir_list .people').text().trim().slice(3);
-      arr[7] = $('.tarvel_dir_list .cost').text().trim().slice(5, -3);
-      arr[8] = $('.va_con').text().replace(/\s+/g, ' ');
+    try {
+      if(contentArray[0].length == 9) {
+        arr[1] = url;
+      }
+  
+      if($('.va_con').length ==0 && $('.post_wrap').length > 0) {
+        arr[0] = $('.post_title').text().trim();
+        arr[4] = $('.travel_directory .time').text().slice(-10);
+        arr[5] = $('.travel_directory .day').text().trim().slice(5);
+        arr[6] = $('.travel_directory .people').text().trim().slice(3);
+        arr[7] = $('.travel_directory .cost').text().trim().slice(5, -3);
+        arr[8] = $('.summary').nextAll().text().replace(/\s+/g, ' ');
+      } else {
+        arr[0] = $('.headtext').text().trim();
+        arr[4] = $('.tarvel_dir_list .time').text().slice(-10);
+        arr[5] = $('.tarvel_dir_list .day').text().trim().slice(5);
+        arr[6] = $('.tarvel_dir_list .people').text().trim().slice(3);
+        arr[7] = $('.tarvel_dir_list .cost').text().trim().slice(5, -3);
+        arr[8] = $('.va_con').text().replace(/\s+/g, ' ');
+      }
+    } catch(e) {
+      console.log(e);
     }
 
     // 完成请求并行数减一
@@ -173,7 +177,7 @@ function getPageInfo(url, arr, index) {
     }
 
     if(authorCom && pageCom) {
-      write();
+      setTimeout(write, 5000);
     }
   });
 }
